@@ -1,0 +1,298 @@
+# ============================================================
+# Terraform CI Pipeline
+# Purpose:
+# This pipeline validates Terraform code whenever a
+# Pull Request is raised against the main branch.
+#
+# Flow:
+# PR -> Checkout -> Terraform Setup -> Format Check
+#    -> Init -> Validate -> TFLint -> tfsec -> Plan
+# ============================================================
+
+name: Terraform CI
+
+
+# ============================================================
+# Trigger
+# ============================================================
+
+on:
+
+  # This workflow runs whenever a Pull Request is created,
+  # updated, or reopened against the main branch.
+  pull_request:
+
+    # We only want to run this CI pipeline when the target
+    # branch of the PR is "main".
+    branches:
+      - main
+
+
+# ============================================================
+# Jobs
+# ============================================================
+
+jobs:
+
+  terraform:
+
+    # Display name of the job in GitHub Actions UI.
+    name: Terraform CI
+
+    # --------------------------------------------------------
+    # Runner
+    # --------------------------------------------------------
+    #
+    # ubuntu-latest means GitHub will provide a temporary
+    # Ubuntu Linux virtual machine to execute this job.
+    #
+    # GitHub Actions provides GitHub-hosted runners such as:
+    #   - ubuntu-latest
+    #   - windows-latest
+    #   - macos-latest
+    #
+    # We are using Ubuntu because:
+    #   1. Terraform supports Linux very well.
+    #   2. Terraform, TFLint and tfsec work easily on Linux.
+    #   3. GitHub provides Ubuntu runners as managed/hosted agents.
+    #   4. We don't need to maintain our own server/VM.
+    #   5. A fresh runner environment is created for the job.
+    #
+    # IMPORTANT:
+    # ubuntu-latest is a GitHub-hosted runner.
+    # It is NOT our own/self-hosted machine.
+    #
+    runs-on: ubuntu-latest
+
+
+    # ========================================================
+    # Steps
+    # ========================================================
+
+    steps:
+
+      # ------------------------------------------------------
+      # 1. Checkout Repository
+      # ------------------------------------------------------
+      #
+      # GitHub runner starts with a clean temporary machine.
+      # This step downloads/checks out our repository code
+      # into the runner workspace.
+      #
+      # Without checkout, Terraform files such as:
+      #   main.tf
+      #   variables.tf
+      #   provider.tf
+      # etc. would not be available to the pipeline.
+      #
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ------------------------------------------------------
+      # 2. Setup Terraform
+      # ------------------------------------------------------
+      #
+      # Installs/configures Terraform on the GitHub-hosted
+      # Ubuntu runner.
+      #
+      # We use the official HashiCorp setup action.
+      #
+      # After this step, commands such as:
+      #   terraform version
+      #   terraform fmt
+      #   terraform init
+      #   terraform validate
+      #   terraform plan
+      #
+      # can be executed.
+      #
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+
+      # ------------------------------------------------------
+      # 3. Terraform Format Check
+      # ------------------------------------------------------
+      #
+      # Checks whether Terraform files follow standard
+      # Terraform formatting.
+      #
+      # -check means:
+      #   Do not modify files.
+      #   Only check whether formatting is correct.
+      #
+      # -recursive means:
+      #   Check Terraform files recursively inside all
+      #   directories.
+      #
+      # If formatting is incorrect, the pipeline fails.
+      #
+      # Example local command:
+      #   terraform fmt -check -recursive
+      #
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+
+      # ------------------------------------------------------
+      # 4. Terraform Init
+      # ------------------------------------------------------
+      #
+      # IMPORTANT:
+      # Our Terraform code is located under:
+      #
+      #   Environments/dev
+      #
+      # Therefore we explicitly specify the working directory.
+      #
+      # Terraform Init performs tasks such as:
+      #   - Downloads Terraform providers
+      #   - Initializes backend
+      #   - Initializes modules
+      #   - Prepares the working directory for Terraform
+      #
+      # Example:
+      #   Environments/dev/provider.tf
+      #   Environments/dev/main.tf
+      #   Environments/dev/backend.tf
+      #
+      # Terraform must run from the directory containing the
+      # environment's Terraform configuration.
+      #
+      - name: Terraform Init
+        working-directory: Environments/dev
+        run: terraform init
+
+
+      # ------------------------------------------------------
+      # 5. Terraform Validate
+      # ------------------------------------------------------
+      #
+      # Validates the Terraform configuration.
+      #
+      # It checks whether the Terraform configuration is
+      # syntactically and structurally valid.
+      #
+      # It can detect issues such as:
+      #   - Invalid Terraform syntax
+      #   - Invalid resource configuration
+      #   - Invalid references
+      #   - Incorrect module/provider configuration
+      #
+      # This does NOT create or modify Azure resources.
+      #
+      - name: Terraform Validate
+        working-directory: Environments/dev
+        run: terraform validate
+
+
+      # ------------------------------------------------------
+      # 6. Setup TFLint
+      # ------------------------------------------------------
+      #
+      # TFLint is a Terraform linter.
+      #
+      # Terraform Validate checks whether configuration is
+      # valid, while TFLint helps identify Terraform-specific
+      # coding mistakes and best-practice issues.
+      #
+      # Example:
+      #   - Deprecated syntax
+      #   - Invalid/incorrect resource configuration
+      #   - Provider-specific issues
+      #   - Terraform coding best practices
+      #
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+
+
+      # ------------------------------------------------------
+      # 7. Initialize TFLint
+      # ------------------------------------------------------
+      #
+      # TFLint can use plugins for provider-specific rules.
+      #
+      # tflint --init downloads/initializes the required
+      # TFLint plugins.
+      #
+      # We run this command from our Terraform environment:
+      #
+      #   Environments/dev
+      #
+      - name: Initialize TFLint
+        working-directory: Environments/dev
+        run: tflint --init
+
+
+      # ------------------------------------------------------
+      # 8. Run TFLint
+      # ------------------------------------------------------
+      #
+      # Runs TFLint against the Terraform configuration.
+      #
+      # If TFLint identifies configured issues, the pipeline
+      # can fail and prevent the PR from being merged.
+      #
+      - name: Run TFLint
+        working-directory: Environments/dev
+        run: tflint
+
+
+      # ------------------------------------------------------
+      # 9. Run tfsec
+      # ------------------------------------------------------
+      #
+      # tfsec performs security analysis of Terraform code.
+      #
+      # It helps identify potential security misconfigurations
+      # before infrastructure is deployed.
+      #
+      # Examples of security checks can include:
+      #   - Storage security
+      #   - Network security
+      #   - Encryption configuration
+      #   - Public exposure
+      #   - IAM/security-related configuration
+      #
+      # working_directory tells tfsec where our Terraform
+      # configuration exists.
+      #
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: Environments/dev
+
+
+      # ------------------------------------------------------
+      # 10. Terraform Plan
+      # ------------------------------------------------------
+      #
+      # Terraform Plan shows what Terraform WOULD change in
+      # the Azure environment.
+      #
+      # It does NOT create or modify infrastructure.
+      #
+      # It calculates the difference between:
+      #
+      #   Current Azure Infrastructure
+      #             +
+      #   Terraform Configuration
+      #             +
+      #   Terraform State
+      #             =
+      #   Proposed Changes
+      #
+      # Example output:
+      #
+      #   + create
+      #   ~ update
+      #   - destroy
+      #
+      # This is especially important in a Pull Request because
+      # reviewers can verify the infrastructure changes before
+      # the PR is merged.
+      #
+      - name: Terraform Plan
+        working-directory: Environments/dev
+        run: terraform plan
