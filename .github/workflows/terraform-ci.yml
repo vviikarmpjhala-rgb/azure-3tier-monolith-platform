@@ -238,4 +238,7 @@ jobs:
       - name: Terraform Apply
         working-directory: Environments/dev
         shell: powershell
-        run: terraform apply -auto-approve
+        run: |
+          terraform version
+          terraform state list
+          terraform apply -auto-approve
