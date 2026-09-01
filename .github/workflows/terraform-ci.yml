@@ -1,262 +1,246 @@
 # ============================================================
 # Terraform CI Pipeline
-# Purpose:
-# This pipeline validates Terraform code whenever a
-# Pull Request is raised against the main branch.
-#
-# Flow:
-# PR -> Checkout -> Terraform Setup -> Format Check
-#    -> Init -> Validate -> TFLint -> tfsec -> Plan
 # ============================================================
 
 name: Terraform CI
 
 
 # ============================================================
-# Trigger
+# PIPELINE TRIGGER
 # ============================================================
-
+#
+# This pipeline runs whenever a Pull Request is created or
+# updated and the target branch is main.
+#
 on:
-
-  # This workflow runs whenever a Pull Request is created,
-  # updated, or reopened against the main branch.
   pull_request:
-
-    # We only want to run this CI pipeline when the target
-    # branch of the PR is "main".
     branches:
       - main
 
 
 # ============================================================
-# Jobs
+# OIDC PERMISSIONS
+# ============================================================
+#
+# id-token: write
+# ----------------
+# Allows GitHub Actions to request an OIDC token.
+#
+# contents: read
+# --------------
+# Allows the workflow to checkout/read repository code.
+#
+permissions:
+  id-token: write
+  contents: read
+
+
+# ============================================================
+# JOB
 # ============================================================
 
 jobs:
 
   terraform:
 
-    # Display name of the job in GitHub Actions UI.
     name: Terraform CI
-
-    # --------------------------------------------------------
-    # Runner
-    # --------------------------------------------------------
-    #
-    # ubuntu-latest means GitHub will provide a temporary
-    # Ubuntu Linux virtual machine to execute this job.
-    #
-    # GitHub Actions provides GitHub-hosted runners such as:
-    #   - ubuntu-latest
-    #   - windows-latest
-    #   - macos-latest
-    #
-    # We are using Ubuntu because:
-    #   1. Terraform supports Linux very well.
-    #   2. Terraform, TFLint and tfsec work easily on Linux.
-    #   3. GitHub provides Ubuntu runners as managed/hosted agents.
-    #   4. We don't need to maintain our own server/VM.
-    #   5. A fresh runner environment is created for the job.
-    #
-    # IMPORTANT:
-    # ubuntu-latest is a GitHub-hosted runner.
-    # It is NOT our own/self-hosted machine.
-    #
-    runs-on: ubuntu-latest
 
 
     # ========================================================
-    # Steps
+    # SELF-HOSTED RUNNER
+    # ========================================================
+    #
+    # We are using our own Windows self-hosted GitHub runner.
+    #
+    # GitHub will select a runner having ALL these labels:
+    #
+    #   self-hosted
+    #   Windows
+    #   X64
+    #
+    runs-on: [self-hosted, Windows, X64]
+
+
+    # ========================================================
+    # AZURE VARIABLES
+    # ========================================================
+    #
+    # These values are configured under:
+    #
+    # GitHub
+    #   -> Repository
+    #      -> Settings
+    #         -> Secrets and variables
+    #            -> Actions
+    #               -> Variables
+    #
+    # Required variables:
+    #
+    # AZURE_CLIENT_ID
+    # AZURE_TENANT_ID
+    # AZURE_SUBSCRIPTION_ID
+    #
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+
+    # ========================================================
+    # STEPS
     # ========================================================
 
     steps:
 
+
       # ------------------------------------------------------
-      # 1. Checkout Repository
+      # 1. CHECKOUT
       # ------------------------------------------------------
       #
-      # GitHub runner starts with a clean temporary machine.
-      # This step downloads/checks out our repository code
-      # into the runner workspace.
-      #
-      # Without checkout, Terraform files such as:
-      #   main.tf
-      #   variables.tf
-      #   provider.tf
-      # etc. would not be available to the pipeline.
+      # Downloads the repository code to the self-hosted
+      # runner workspace.
       #
       - name: Checkout repository
         uses: actions/checkout@v4
 
 
       # ------------------------------------------------------
-      # 2. Setup Terraform
+      # 2. SETUP TERRAFORM
       # ------------------------------------------------------
       #
-      # Installs/configures Terraform on the GitHub-hosted
-      # Ubuntu runner.
-      #
-      # We use the official HashiCorp setup action.
-      #
-      # After this step, commands such as:
-      #   terraform version
-      #   terraform fmt
-      #   terraform init
-      #   terraform validate
-      #   terraform plan
-      #
-      # can be executed.
+      # Installs/configures Terraform on the runner.
       #
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
 
       # ------------------------------------------------------
-      # 3. Terraform Format Check
+      # 3. AZURE LOGIN USING OIDC
       # ------------------------------------------------------
       #
-      # Checks whether Terraform files follow standard
-      # Terraform formatting.
+      # Authentication flow:
       #
-      # -check means:
-      #   Do not modify files.
-      #   Only check whether formatting is correct.
+      # GitHub Actions
+      #       |
+      #       | OIDC Token
+      #       v
+      # Microsoft Entra ID
+      #       |
+      #       v
+      # App Registration
+      #       |
+      #       v
+      # Azure Subscription
       #
-      # -recursive means:
-      #   Check Terraform files recursively inside all
-      #   directories.
+      # No client secret is required.
       #
-      # If formatting is incorrect, the pipeline fails.
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+
+      # ------------------------------------------------------
+      # 4. VERIFY AZURE LOGIN
+      # ------------------------------------------------------
       #
-      # Example local command:
-      #   terraform fmt -check -recursive
+      # This is extremely useful for troubleshooting.
+      #
+      # It confirms that GitHub Actions is authenticated
+      # against the expected Azure subscription.
+      #
+      - name: Verify Azure Login
+        shell: powershell
+        run: |
+          az account show
+          az account list --output table
+
+
+      # ------------------------------------------------------
+      # 5. TERRAFORM FORMAT CHECK
+      # ------------------------------------------------------
+      #
+      # Checks Terraform formatting.
+      #
+      # -check      -> Only checks, does not modify files.
+      # -recursive  -> Checks Terraform files recursively.
       #
       - name: Terraform Format Check
+        shell: powershell
         run: terraform fmt -check -recursive
 
 
       # ------------------------------------------------------
-      # 4. Terraform Init
+      # 6. TERRAFORM INIT
       # ------------------------------------------------------
       #
-      # IMPORTANT:
-      # Our Terraform code is located under:
+      # Terraform configuration is under:
       #
-      #   Environments/dev
+      # Environments/dev
       #
-      # Therefore we explicitly specify the working directory.
-      #
-      # Terraform Init performs tasks such as:
-      #   - Downloads Terraform providers
-      #   - Initializes backend
-      #   - Initializes modules
-      #   - Prepares the working directory for Terraform
-      #
-      # Example:
-      #   Environments/dev/provider.tf
-      #   Environments/dev/main.tf
-      #   Environments/dev/backend.tf
-      #
-      # Terraform must run from the directory containing the
-      # environment's Terraform configuration.
+      # Therefore this command runs from that directory.
       #
       - name: Terraform Init
         working-directory: Environments/dev
+        shell: powershell
         run: terraform init
 
 
       # ------------------------------------------------------
-      # 5. Terraform Validate
+      # 7. TERRAFORM VALIDATE
       # ------------------------------------------------------
       #
-      # Validates the Terraform configuration.
+      # Validates Terraform syntax and configuration.
       #
-      # It checks whether the Terraform configuration is
-      # syntactically and structurally valid.
-      #
-      # It can detect issues such as:
-      #   - Invalid Terraform syntax
-      #   - Invalid resource configuration
-      #   - Invalid references
-      #   - Incorrect module/provider configuration
-      #
-      # This does NOT create or modify Azure resources.
+      # It does NOT create Azure resources.
       #
       - name: Terraform Validate
         working-directory: Environments/dev
+        shell: powershell
         run: terraform validate
 
 
       # ------------------------------------------------------
-      # 6. Setup TFLint
+      # 8. SETUP TFLINT
       # ------------------------------------------------------
       #
-      # TFLint is a Terraform linter.
-      #
-      # Terraform Validate checks whether configuration is
-      # valid, while TFLint helps identify Terraform-specific
-      # coding mistakes and best-practice issues.
-      #
-      # Example:
-      #   - Deprecated syntax
-      #   - Invalid/incorrect resource configuration
-      #   - Provider-specific issues
-      #   - Terraform coding best practices
+      # Installs TFLint.
       #
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@v4
 
 
       # ------------------------------------------------------
-      # 7. Initialize TFLint
+      # 9. INITIALIZE TFLINT
       # ------------------------------------------------------
       #
-      # TFLint can use plugins for provider-specific rules.
-      #
-      # tflint --init downloads/initializes the required
-      # TFLint plugins.
-      #
-      # We run this command from our Terraform environment:
-      #
-      #   Environments/dev
+      # Downloads/initializes required TFLint plugins.
       #
       - name: Initialize TFLint
         working-directory: Environments/dev
+        shell: powershell
         run: tflint --init
 
 
       # ------------------------------------------------------
-      # 8. Run TFLint
+      # 10. RUN TFLINT
       # ------------------------------------------------------
       #
-      # Runs TFLint against the Terraform configuration.
-      #
-      # If TFLint identifies configured issues, the pipeline
-      # can fail and prevent the PR from being merged.
+      # Performs Terraform linting and best-practice checks.
       #
       - name: Run TFLint
         working-directory: Environments/dev
+        shell: powershell
         run: tflint
 
 
       # ------------------------------------------------------
-      # 9. Run tfsec
+      # 11. TFSEC SECURITY SCAN
       # ------------------------------------------------------
       #
-      # tfsec performs security analysis of Terraform code.
-      #
-      # It helps identify potential security misconfigurations
-      # before infrastructure is deployed.
-      #
-      # Examples of security checks can include:
-      #   - Storage security
-      #   - Network security
-      #   - Encryption configuration
-      #   - Public exposure
-      #   - IAM/security-related configuration
-      #
-      # working_directory tells tfsec where our Terraform
-      # configuration exists.
+      # Scans Terraform code for security misconfigurations.
       #
       - name: Run tfsec
         uses: aquasecurity/tfsec-action@v1.0.3
@@ -265,34 +249,19 @@ jobs:
 
 
       # ------------------------------------------------------
-      # 10. Terraform Plan
+      # 12. TERRAFORM PLAN
       # ------------------------------------------------------
       #
-      # Terraform Plan shows what Terraform WOULD change in
-      # the Azure environment.
+      # Shows what Terraform intends to create/update/destroy.
       #
-      # It does NOT create or modify infrastructure.
+      # + create
+      # ~ update
+      # - destroy
       #
-      # It calculates the difference between:
-      #
-      #   Current Azure Infrastructure
-      #             +
-      #   Terraform Configuration
-      #             +
-      #   Terraform State
-      #             =
-      #   Proposed Changes
-      #
-      # Example output:
-      #
-      #   + create
-      #   ~ update
-      #   - destroy
-      #
-      # This is especially important in a Pull Request because
-      # reviewers can verify the infrastructure changes before
-      # the PR is merged.
+      # IMPORTANT:
+      # terraform plan DOES NOT modify Azure infrastructure.
       #
       - name: Terraform Plan
         working-directory: Environments/dev
+        shell: powershell
         run: terraform plan
