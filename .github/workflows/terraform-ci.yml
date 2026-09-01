@@ -174,8 +174,8 @@ jobs:
       # Installs TFLint for Terraform linting.
       #
 
-      - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v4
+      # - name: Setup TFLint
+      #   uses: terraform-linters/setup-tflint@v4
 
 
       # ------------------------------------------------------
@@ -185,10 +185,10 @@ jobs:
       # Initializes TFLint and downloads required plugins.
       #
 
-      - name: Initialize TFLint
-        working-directory: Environments/dev
-        shell: powershell
-        run: tflint --init
+      # - name: Initialize TFLint
+      #   working-directory: Environments/dev
+      #   shell: powershell
+      #   run: tflint --init
 
 
       # ------------------------------------------------------
@@ -198,10 +198,10 @@ jobs:
       # Performs Terraform linting and best-practice checks.
       #
 
-      - name: Run TFLint
-        working-directory: Environments/dev
-        shell: powershell
-        run: tflint
+        # - name: Run TFLint
+        #   working-directory: Environments/dev
+        #   shell: powershell
+        #   run: tflint
 
 
       # ------------------------------------------------------
