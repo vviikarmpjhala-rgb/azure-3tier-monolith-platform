@@ -9,8 +9,8 @@ name: Terraform CI
 # PIPELINE TRIGGER
 # ============================================================
 #
-# Runs when a Pull Request is created or updated
-# against the main branch.
+# Pipeline runs when a Pull Request is created or updated
+# with target branch = main.
 #
 
 on:
@@ -34,40 +34,15 @@ jobs:
     # SELF-HOSTED WINDOWS RUNNER
     # ========================================================
     #
-    # The GitHub Actions job will run on our own
-    # Windows self-hosted runner.
+    # The job will run on the existing Windows self-hosted
+    # GitHub Actions runner.
     #
+
     runs-on: [self-hosted, Windows, X64]
 
 
     # ========================================================
-    # AZURE VARIABLES
-    # ========================================================
-    #
-    # These values are configured in:
-    #
-    # GitHub Repository
-    #   -> Settings
-    #   -> Secrets and variables
-    #   -> Actions
-    #   -> Variables
-    #
-    # Required:
-    #
-    # AZURE_CLIENT_ID
-    # AZURE_TENANT_ID
-    # AZURE_SUBSCRIPTION_ID
-    # AZURE_CLIENT_SECRET
-    #
-    env:
-      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      AZURE_CLIENT_SECRET: ${{ vars.AZURE_CLIENT_SECRET }}
-
-
-    # ========================================================
-    # STEPS
+    # JOB STEPS
     # ========================================================
 
     steps:
@@ -104,28 +79,35 @@ jobs:
       #
       # Service Principal + Client Secret
       #
-      # NO OIDC
-      # NO Federated Credential
+      # Values are taken from GitHub Repository Variables:
       #
-      # The Service Principal is associated with the
-      # Azure App Registration: azure-3tier
+      #   AZURE_CLIENT_ID
+      #   AZURE_CLIENT_SECRET
+      #   AZURE_TENANT_ID
+      #   AZURE_SUBSCRIPTION_ID
+      #
+      # OIDC is NOT being used.
+      # Federated Credential is NOT required.
       #
 
       - name: Azure Login
         uses: azure/login@v2
         with:
-          auth-type: SERVICE_PRINCIPAL
-          client-id: ${{ env.AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
-          client-secret: ${{ env.AZURE_CLIENT_SECRET }}
+          creds: |
+            {
+              "clientId": "${{ vars.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ vars.AZURE_CLIENT_SECRET }}",
+              "tenantId": "${{ vars.AZURE_TENANT_ID }}",
+              "subscriptionId": "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+            }
 
 
       # ------------------------------------------------------
       # 4. VERIFY AZURE LOGIN
       # ------------------------------------------------------
       #
-      # Confirms that the runner is authenticated to Azure.
+      # Verifies that the Service Principal successfully
+      # authenticated to the expected Azure subscription.
       #
 
       - name: Verify Azure Login
@@ -141,11 +123,8 @@ jobs:
       #
       # Checks Terraform formatting.
       #
-      # -check:
-      #   Does not modify files.
-      #
-      # -recursive:
-      #   Checks Terraform files recursively.
+      # -check      = checks only, does not modify files
+      # -recursive  = checks Terraform files recursively
       #
 
       - name: Terraform Format Check
@@ -159,13 +138,12 @@ jobs:
       #
       # Terraform configuration is located under:
       #
-      # Environments/dev
+      #   Environments/dev
       #
-      # terraform init:
-      #   - Initializes Terraform
-      #   - Downloads providers
-      #   - Initializes backend
-      #   - Initializes modules
+      # Initializes:
+      #   - Terraform backend
+      #   - Providers
+      #   - Modules
       #
 
       - name: Terraform Init
@@ -178,9 +156,9 @@ jobs:
       # 7. TERRAFORM VALIDATE
       # ------------------------------------------------------
       #
-      # Validates Terraform configuration.
+      # Validates Terraform configuration and syntax.
       #
-      # Does not create or modify Azure resources.
+      # This does not create or modify Azure resources.
       #
 
       - name: Terraform Validate
@@ -193,7 +171,7 @@ jobs:
       # 8. SETUP TFLINT
       # ------------------------------------------------------
       #
-      # Installs TFLint.
+      # Installs TFLint for Terraform linting.
       #
 
       - name: Setup TFLint
@@ -204,7 +182,7 @@ jobs:
       # 9. INITIALIZE TFLINT
       # ------------------------------------------------------
       #
-      # Initializes TFLint plugins/configuration.
+      # Initializes TFLint and downloads required plugins.
       #
 
       - name: Initialize TFLint
@@ -243,14 +221,13 @@ jobs:
       # 12. TERRAFORM PLAN
       # ------------------------------------------------------
       #
-      # Shows the changes Terraform would make.
+      # Shows the changes Terraform would make:
       #
-      # + create
-      # ~ update
-      # - destroy
+      #   + create
+      #   ~ update
+      #   - destroy
       #
-      # IMPORTANT:
-      # terraform plan does NOT modify Azure infrastructure.
+      # Terraform plan does NOT modify Azure infrastructure.
       #
 
       - name: Terraform Plan
