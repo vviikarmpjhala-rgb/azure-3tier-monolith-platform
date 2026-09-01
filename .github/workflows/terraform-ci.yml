@@ -234,3 +234,8 @@ jobs:
         working-directory: Environments/dev
         shell: powershell
         run: terraform plan
+
+      - name: Terraform Apply
+        working-directory: Environments/dev
+        shell: powershell
+        run: terraform apply -auto-approve
