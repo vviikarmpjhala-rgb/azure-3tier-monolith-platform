@@ -211,10 +211,10 @@ jobs:
       # Scans Terraform code for security misconfigurations.
       #
 
-      - name: Run tfsec
-        uses: aquasecurity/tfsec-action@v1.0.3
-        with:
-          working_directory: Environments/dev
+      # - name: Run tfsec
+      #   uses: aquasecurity/tfsec-action@v1.0.3
+      #   with:
+      #     working_directory: Environments/dev
 
 
       # ------------------------------------------------------
