@@ -1,94 +1,22 @@
-# ============================================================
-# Terraform CI Pipeline
-# ============================================================
-
 name: Terraform CI
-
-
-# ============================================================
-# PIPELINE TRIGGER
-# ============================================================
-#
-# Pipeline runs when a Pull Request is created or updated
-# with target branch = main.
-#
 
 on:
   pull_request:
     branches:
       - main
 
-
-# ============================================================
-# JOB
-# ============================================================
-
 jobs:
-
   terraform:
-
     name: Terraform CI
-
-
-    # ========================================================
-    # SELF-HOSTED WINDOWS RUNNER
-    # ========================================================
-    #
-    # The job will run on the existing Windows self-hosted
-    # GitHub Actions runner.
-    #
-
     runs-on: [self-hosted, Windows, X64]
 
-
-    # ========================================================
-    # JOB STEPS
-    # ========================================================
-
     steps:
-
-
-      # ------------------------------------------------------
-      # 1. CHECKOUT REPOSITORY
-      # ------------------------------------------------------
-      #
-      # Downloads the repository code to the self-hosted
-      # runner workspace.
-      #
 
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
-      # ------------------------------------------------------
-      # 2. SETUP TERRAFORM
-      # ------------------------------------------------------
-      #
-      # Installs/configures Terraform on the runner.
-      #
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-
-
-      # ------------------------------------------------------
-      # 3. AZURE LOGIN
-      # ------------------------------------------------------
-      #
-      # Authentication method:
-      #
-      # Service Principal + Client Secret
-      #
-      # Values are taken from GitHub Repository Variables:
-      #
-      #   AZURE_CLIENT_ID
-      #   AZURE_CLIENT_SECRET
-      #   AZURE_TENANT_ID
-      #   AZURE_SUBSCRIPTION_ID
-      #
-      # OIDC is NOT being used.
-      # Federated Credential is NOT required.
-      #
 
       - name: Azure Login
         uses: azure/login@v2
@@ -101,144 +29,27 @@ jobs:
               "subscriptionId": "${{ vars.AZURE_SUBSCRIPTION_ID }}"
             }
 
-
-      # ------------------------------------------------------
-      # 4. VERIFY AZURE LOGIN
-      # ------------------------------------------------------
-      #
-      # Verifies that the Service Principal successfully
-      # authenticated to the expected Azure subscription.
-      #
-
       - name: Verify Azure Login
         shell: powershell
-        run: |
-          az account show
-          az account list --output table
-
-
-      # ------------------------------------------------------
-      # 5. TERRAFORM FORMAT CHECK
-      # ------------------------------------------------------
-      #
-      # Checks Terraform formatting.
-      #
-      # -check      = checks only, does not modify files
-      # -recursive  = checks Terraform files recursively
-      #
+        run: az account show
 
       - name: Terraform Format Check
         shell: powershell
         run: terraform fmt -check -recursive
-
-
-      # ------------------------------------------------------
-      # 6. TERRAFORM INIT
-      # ------------------------------------------------------
-      #
-      # Terraform configuration is located under:
-      #
-      #   Environments/dev
-      #
-      # Initializes:
-      #   - Terraform backend
-      #   - Providers
-      #   - Modules
-      #
 
       - name: Terraform Init
         working-directory: Environments/dev
         shell: powershell
         run: terraform init
 
-
-      # ------------------------------------------------------
-      # 7. TERRAFORM VALIDATE
-      # ------------------------------------------------------
-      #
-      # Validates Terraform configuration and syntax.
-      #
-      # This does not create or modify Azure resources.
-      #
-
       - name: Terraform Validate
         working-directory: Environments/dev
         shell: powershell
         run: terraform validate
-
-
-      # ------------------------------------------------------
-      # 8. SETUP TFLINT
-      # ------------------------------------------------------
-      #
-      # Installs TFLint for Terraform linting.
-      #
-
-      # - name: Setup TFLint
-      #   uses: terraform-linters/setup-tflint@v4
-
-
-      # ------------------------------------------------------
-      # 9. INITIALIZE TFLINT
-      # ------------------------------------------------------
-      #
-      # Initializes TFLint and downloads required plugins.
-      #
-
-      # - name: Initialize TFLint
-      #   working-directory: Environments/dev
-      #   shell: powershell
-      #   run: tflint --init
-
-
-      # ------------------------------------------------------
-      # 10. RUN TFLINT
-      # ------------------------------------------------------
-      #
-      # Performs Terraform linting and best-practice checks.
-      #
-
-        # - name: Run TFLint
-        #   working-directory: Environments/dev
-        #   shell: powershell
-        #   run: tflint
-
-
-      # ------------------------------------------------------
-      # 11. TFSEC SECURITY SCAN
-      # ------------------------------------------------------
-      #
-      # Scans Terraform code for security misconfigurations.
-      #
-
-      # - name: Run tfsec
-      #   uses: aquasecurity/tfsec-action@v1.0.3
-      #   with:
-      #     working_directory: Environments/dev
-
-
-      # ------------------------------------------------------
-      # 12. TERRAFORM PLAN
-      # ------------------------------------------------------
-      #
-      # Shows the changes Terraform would make:
-      #
-      #   + create
-      #   ~ update
-      #   - destroy
-      #
-      # Terraform plan does NOT modify Azure infrastructure.
-      #
 
       - name: Terraform Plan
         working-directory: Environments/dev
         shell: powershell
         run: terraform plan
 
-      - name: Terraform Apply
-        working-directory: Environments/dev
-        shell: powershell
-        run: |
-          terraform version
-          terraform state list
-          terraform apply -auto-approve
+      
