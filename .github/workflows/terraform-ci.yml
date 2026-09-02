@@ -10,13 +10,20 @@ jobs:
     name: Terraform CI
     runs-on: [self-hosted, Windows, X64]
 
-    steps:
+    env:
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ vars.AZURE_CLIENT_SECRET }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+    steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
 
       - name: Azure Login
         uses: azure/login@v2
@@ -31,7 +38,9 @@ jobs:
 
       - name: Verify Azure Login
         shell: powershell
-        run: az account show
+        run: |
+          az account show
+          az account list --output table
 
       - name: Terraform Format Check
         shell: powershell
