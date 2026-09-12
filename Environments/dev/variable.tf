@@ -10,3 +10,21 @@ variable "dev_mono_subnet" {
   type        = map(any)
   description = "this is frontend-subnet with address prefixes [10.0.1.0/24]"
 }
+variable "dev_mono_vms" {
+  type        = map(any)
+  description = "linux vms for dev mono -apps "
+}
+variable "dev_mono_pips" {
+  type        = map(any)
+  description = "This variable is used to create public ip for AzureBastion and Azure Load Balancer"
+}
+variable "dev_mono_bastions" {
+  type        = map(any)
+  description = "This variable is used to create bastion host for dev environment"
+}
+
+variable "dev_nat_gateway" {
+  type        = map(any)
+  description = "natgatway for accessing the internet and assign public ip to it"
+
+}
