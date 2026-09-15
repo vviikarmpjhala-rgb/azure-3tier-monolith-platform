@@ -1,0 +1,32 @@
+ trigger: none
+ 
+ pool: Mono_Infra_Agent
+
+ stages:
+   - stage: 
+     jobs:
+       - job: 
+         steps: 
+           - task: TerraformInstaller@1
+             inputs:
+               terraformVersion: 'latest'
+           - task: TerraformTask@5
+             inputs:
+               provider: 'azurerm'
+               command: 'init'
+               backendServiceArm: 'Azure subscription 1(0b96a7da-226d-4293-92f4-84932716a1d4)'
+               backendAzureRmResourceGroupName: 'mono_dev_rg1'
+               backendAzureRmStorageAccountName: 'monodevrg1sto1'
+               backendAzureRmContainerName: 'monodevrg1con'
+               backendAzureRmKey: 'dev.terraform.tfvars'
+           - task: TerraformTask@5
+             inputs:
+               provider: 'azurerm'
+               command: 'validate'
+         
+    
+            
+            
+           
+
+          
