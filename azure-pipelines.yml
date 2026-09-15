@@ -19,6 +19,11 @@
                backendAzureRmStorageAccountName: 'monodevrg1sto1'
                backendAzureRmContainerName: 'monodevrg1con'
                backendAzureRmKey: 'dev.terraform.tfvars'
+           -  task: TerraformTask@5
+              inputs:
+              provider: 'azurerm'
+              command: 'validate'
+    
             
             
            
